@@ -2,13 +2,36 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser"); 
+const multer = require("multer");
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+
+const upload = multer({ storage });
+
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); 
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(cors({
+    origin: [
+        "http://localhost:5173",
+        "https://adampur-4a343.web.app", 
+        "https://adampur-4a343.firebaseapp.com",
+    ],
+    credentials: true,
+}));
 app.use(express.json());
+app.use(cookieParser()); // Middleware for parsing cookies
+
 
 // const uri = "mongodb://localhost:27017"
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -36,28 +59,27 @@ async function run() {
     const paymentCollection = client.db("adampurDb").collection("payments");
 
     // jwt related api
-    app.post("/jwt", async (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "1h",
-      });
-      res.send({ token });
-    });
+app.post("/jwt", async (req, res) => {
+  const user = req.body;
+  const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+    expiresIn: "1h"});
+    res.send({ token });
+  });
 
     // middlewares
     const verifyToken = (req, res, next) => {
-      // console.log("inside verify token", req.headers.authorization);
+      // console.log('inside veryfy token', req.headers.authorization);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "Unauthorized access" });
       }
       const token = req.headers.authorization.split(" ")[1];
-      try {
-        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if(err){
+          return res.status(401).send({message: 'unauthorized access'})
+        }
         req.decoded = decoded;
         next();
-      } catch (err) {
-        return res.status(401).send({ message: "Invalid or expired token" });
-      }
+      })
     };
 
     // use verify admin after verifyToken
@@ -87,6 +109,15 @@ async function run() {
       res.send(result);
     });
 
+// logOut
+    app.post("/logout", async (req, res) => {
+      const user = req.body;
+      console.log("logging out", user);
+      res
+      .clearCookie("token", { ...cookeOption, maxAge: 0 })
+      .send({ success: true});
+    });
+
     app.post("/carts", async (req, res) => {
       const cartItem = req.body;
       const result = await cartCollection.insertOne(cartItem);
@@ -113,8 +144,9 @@ async function run() {
 
     app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
+
       if (email !== req.decoded.email) {
-        return res.status(403).send({ message: "forbidden access" });
+        return res.status(403).send({ message: "unauthorized access" });
       }
 
       const query = { email: email };
@@ -205,12 +237,6 @@ app.patch('/menu/:id', async(req, res) =>{
     console.error("Image URL is missing or `item` is undefined");
   }
   
-  // if (res.item && res.item.display_url) {
-  //   updatedDoc.$set.image = res.item.display_url;
-  // } else {
-  //   console.error("Image URL is missing or `res.item` is undefined");
-  // }
-  
   try {
     // Perform your MongoDB update operation
     const result = await menuCollection.updateOne(filter, updatedDoc);
@@ -263,6 +289,17 @@ const deleteResult = await cartCollection.deleteMany(query);
 
   res.send({paymentResult, deleteResult});
 })
+
+// stripe-test
+app.get("/stripe-test", async (req, res) => {
+  try {
+    const balance = await stripe.balance.retrieve();
+    res.json(balance);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Stripe error");
+  }
+});
 
 
 // stats or ananlytics
@@ -325,17 +362,17 @@ app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
           email: { $first: '$email' }, // Include the email field
           totalOrders: { $sum: 1 }, // Count the number of orders
           menuItems: { $push: '$menuItems' }, // Collect the matched menu items
-          revenue: { $sum: { $toDouble: '$menuItems.price' } }, // Calculate total revenue
-          quantity: { $sum: 1 }, // Calculate the quantity of each menu item
+          revenue: { $sum: { $toDouble: '$menuItems.price' } }, 
+          quantity: { $sum: 1 }, 
         },
       },
       {
         $project: {
-          _id: 0, // Include the grouped _id (menu item name)
-          totalOrders: 1, // Include totalOrders
-          menuItems: 1, // Include menuItems
-          revenue: 1, // Include revenue
-          quantity: 1, // Include quantity
+          _id: 0, 
+          totalOrders: 1,
+          menuItems: 1, 
+          revenue: 1, 
+          quantity: 1, 
         },
       },
     ]).toArray();
@@ -346,9 +383,6 @@ app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
     res.status(500).send({ message: 'Internal server error', error });
   }
 });
-
-
-
 
     app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
@@ -362,22 +396,43 @@ app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
       res.send(result);
     });
 
-    app.post("/student", async (req, res) => {
-      const newStudent = req.body;
-      console.log(newStudent);
-      const result = await studentCollection.insertOne(newStudent);
-      res.send(result);
+    app.post("/student", upload.single("photo"), async (req, res) => {
+      try {
+        console.log("Received data:", req.body);
+        console.log("Received file:", req.file);
+        const studentData = JSON.parse(req.body.data); // Parse JSON string
+        const photo = req.file; // Access uploaded file
+    
+        if (!studentData.name || !photo) {
+          return res.status(400).json({ error: "Name and photo are required" });
+        }
+    
+        // Save the student to the database
+        const newStudent = new Student({
+          ...studentData,
+          photo: `/uploads/${photo.filename}`, // Store photo path or URL
+        });
+    
+        await newStudent.save();
+        res.status(201).json({ message: "Student added successfully" });
+      } catch (error) {
+        console.error("Error adding student:", error);
+        res.status(500).json({ error: "Failed to add student" });
+      }
     });
+    
 
     app.get("/student", async (req, res) => {
       try {
-        const result = await studentCollection.find({}).toArray(); // Call toArray() on the cursor
+        const result = await studentCollection.find({}).toArray();
+        console.log("Fetched students:", result); // Debug log
         res.send(result);
       } catch (error) {
         console.error("Error fetching students:", error);
         res.status(500).send({ error: "Failed to fetch students" });
       }
     });
+    
 
     app.delete("/student/:id", async (req, res) => {
       const id = req.params.id;
@@ -385,15 +440,7 @@ app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
       const result = await studentCollection.deleteOne(query);
       res.send(result);
     });
-
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
-    // console.log(
-    //   "Pinged your deployment. You successfully connected to MongoDB!"
-    // );
   } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
   }
 }
 run().catch(console.dir);
