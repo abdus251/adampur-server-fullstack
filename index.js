@@ -24,8 +24,8 @@ const port = process.env.PORT || 5000;
 app.use(cors({
     origin: [
         "http://localhost:5173",
-        "https://adampur-4a343.web.app", 
-        "https://adampur-4a343.firebaseapp.com",
+        // "https://adampur-4a343.web.app", 
+        // "https://adampur-4a343.firebaseapp.com",
     ],
     credentials: true,
 }));
@@ -49,7 +49,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
+    await client.connect();
     const userCollection = client.db("adampurDb").collection("users");
     const menuCollection = client.db("adampurDb").collection("menu");
     const reviewCollection = client.db("adampurDb").collection("reviews");
@@ -394,31 +394,6 @@ app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
     app.get("/reviews", async (req, res) => {
       const result = await reviewCollection.find().toArray();
       res.send(result);
-    });
-
-    app.post("/student", upload.single("photo"), async (req, res) => {
-      try {
-        console.log("Received data:", req.body);
-        console.log("Received file:", req.file);
-        const studentData = JSON.parse(req.body.data); // Parse JSON string
-        const photo = req.file; // Access uploaded file
-    
-        if (!studentData.name || !photo) {
-          return res.status(400).json({ error: "Name and photo are required" });
-        }
-    
-        // Save the student to the database
-        const newStudent = new Student({
-          ...studentData,
-          photo: `/uploads/${photo.filename}`, // Store photo path or URL
-        });
-    
-        await newStudent.save();
-        res.status(201).json({ message: "Student added successfully" });
-      } catch (error) {
-        console.error("Error adding student:", error);
-        res.status(500).json({ error: "Failed to add student" });
-      }
     });
     
 
