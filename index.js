@@ -20,14 +20,19 @@ require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); 
 const port = process.env.PORT || 5000;
 
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp"); 
+  next();
+});
+
+
 app.use(cors({
   origin: [
       "https://adampur-4a343.web.app",
       "https://adampur-4a343.firebaseapp.com",
       "http://localhost:5173", 
   ],
-  // methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  // allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 }));
 
