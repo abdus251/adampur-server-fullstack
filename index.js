@@ -24,10 +24,10 @@ app.use(cors({
   origin: [
       "https://adampur-4a343.web.app",
       "https://adampur-4a343.firebaseapp.com",
-      "http://localhost:5173", // Keep for local testing
+      "http://localhost:5173", 
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  // methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  // allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 }));
 
@@ -64,6 +64,12 @@ app.post("/jwt", async (req, res) => {
   const user = req.body;
   const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
     expiresIn: "1h"});
+
+    res
+    .cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV=== 'producton'
+    })
     res.send({ token });
   });
 
