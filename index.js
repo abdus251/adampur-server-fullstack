@@ -20,17 +20,16 @@ require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); 
 const port = process.env.PORT || 5000;
 
-// middleware
 app.use(cors({
-    origin: [
-        "http://localhost:5173",
-        // "https://adampur-4a343.web.app", 
-        // "https://adampur-4a343.firebaseapp.com",
-    ],
-    credentials: true,
+  origin: [
+      "https://adampur-4a343.web.app",
+      "https://adampur-4a343.firebaseapp.com",
+      "http://localhost:5173", // Keep for local testing
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
 }));
-app.use(express.json());
-app.use(cookieParser()); // Middleware for parsing cookies
 
 
 // const uri = "mongodb://localhost:27017"
@@ -45,6 +44,8 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+app.options("*", cors()); // Allows all OPTIONS requests
 
 async function run() {
   try {
