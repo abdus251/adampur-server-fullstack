@@ -1,41 +1,57 @@
 const express = require("express");
-const app = express();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser"); 
 const multer = require("multer");
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
-});
-
-const upload = multer({ storage });
+const app = express();
+const helmet = require("helmet");
 
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); 
 const port = process.env.PORT || 5000;
 
-app.use((req, res, next) => {
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp"); 
-  next();
-});
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://adampur-4a343.web.app",
+  "https://adampur-4a343.firebaseapp.com",
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true); 
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true, 
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    allowedHeaders: "Content-Type,Authorization",
+  })
+);
+app.use(
+  helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, 
+  })
+);
 
 
-app.use(cors({
-  origin: [
-      "https://adampur-4a343.web.app",
-      "https://adampur-4a343.firebaseapp.com",
-      "http://localhost:5173", 
-  ],
-  credentials: true,
-}));
+// app.use(cors({
+//   origin: [
+//       "http://localhost:5173",
+//       "https://adampur-4a343.web.app",
+//       "https://adampur-4a343.firebaseapp.com",
+       
+//   ],
+//   credentials: true,
+//   methods: "GET,HEAD,PUT,PATCH,POST,DELETE", 
+//   allowedHeaders: "Content-Type,Authorization" 
+// }));
 
+app.use(express.json());
+app.use(cookieParser());
 
 // const uri = "mongodb://localhost:27017"
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
@@ -67,8 +83,14 @@ async function run() {
     // jwt related api
 app.post("/jwt", async (req, res) => {
   const user = req.body;
-  const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-    expiresIn: "1h"});
+
+  if(!user || !user.email) {
+    return res.status(400).json({ error: "User data is missing" });
+  } 
+
+const token = jwt.sign({ email: user.email }, process.env.ACCESS_TOKEN_SECRET, {
+  expiresIn: "1h"
+});
 
     res
     .cookie('token', token, {
@@ -78,7 +100,10 @@ app.post("/jwt", async (req, res) => {
     res.send({ token });
   });
 
-    // middlewares
+    // Middleware setup
+app.use(express.json());  // Required for parsing JSON in request body
+app.use(cors({ credentials: true, origin: "http://localhost:5173" })); 
+app.use(cookieParser());
     const verifyToken = (req, res, next) => {
       // console.log('inside veryfy token', req.headers.authorization);
       if (!req.headers.authorization) {
