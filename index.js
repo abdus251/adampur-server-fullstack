@@ -10,6 +10,9 @@ require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); 
 const port = process.env.PORT || 5000;
 
+app.options('*', cors());  // Allow all OPTIONS pre-flight requests
+
+
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -20,6 +23,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
+      console.log("Origin:", origin);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true); 
       } else {
@@ -31,6 +35,7 @@ app.use(
     allowedHeaders: "Content-Type,Authorization",
   })
 );
+
 app.use(
   helmet({
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, 
@@ -132,12 +137,26 @@ app.use(cookieParser());
     };
 
     // carts collection
-    app.get("/carts", async (req, res) => {
+    app.get('/carts', (req, res) => {
+      res.setHeader('Access-Control-Allow-Origin', 'https://adampur-4a343.web.app');  // Set your origin here
+      res.setHeader('Access-Control-Allow-Credentials', 'true'); // Allow credentials (cookies, etc.)
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE'); // Allow necessary methods
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization'); // Allow necessary headers
+    
+      // Your actual API logic here
       const email = req.query.email;
       const query = { email: email };
-      const result = await cartCollection.find(query).toArray();
-      res.send(result);
+      cartCollection.find(query).toArray()
+        .then(result => res.send(result))
+        .catch(error => res.status(500).send({ error: error.message }));
     });
+    
+    // app.get("/carts", async (req, res) => {
+    //   const email = req.query.email;
+    //   const query = { email: email };
+    //   const result = await cartCollection.find(query).toArray();
+    //   res.send(result);
+    // });
 
     app.delete("/carts/:id", async (req, res) => {
       const id = req.params.id;
