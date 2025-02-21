@@ -1,19 +1,14 @@
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-const cookieParser = require("cookie-parser"); 
+const cookieParser = require("cookie-parser");
 const multer = require("multer");
-const app = express();
 const helmet = require("helmet");
-
 require("dotenv").config();
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY); 
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+const app = express();
 const port = process.env.PORT || 5000;
-
-app.options('*', cors());  // Allow all OPTIONS pre-flight requests
-
-
-
 const allowedOrigins = [
   "http://localhost:5173",
   "https://adampur-4a343.web.app",
@@ -23,36 +18,33 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      console.log("Origin:", origin);
       if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true); 
+        callback(null, origin);
       } else {
         callback(new Error("Not allowed by CORS"));
       }
     },
-    credentials: true, 
+    credentials: true,
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     allowedHeaders: "Content-Type,Authorization",
   })
 );
 
-app.use(
-  helmet({
-    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, 
-  })
-);
-
+// Your routes here
+app.get("/carts", (req, res) => {
+  res.json({ message: "Carts data" });
+});
 
 // app.use(cors({
 //   origin: [
 //       "http://localhost:5173",
 //       "https://adampur-4a343.web.app",
 //       "https://adampur-4a343.firebaseapp.com",
-       
+
 //   ],
 //   credentials: true,
-//   methods: "GET,HEAD,PUT,PATCH,POST,DELETE", 
-//   allowedHeaders: "Content-Type,Authorization" 
+//   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+//   allowedHeaders: "Content-Type,Authorization"
 // }));
 
 app.use(express.json());
@@ -86,29 +78,32 @@ async function run() {
     const paymentCollection = client.db("adampurDb").collection("payments");
 
     // jwt related api
-app.post("/jwt", async (req, res) => {
-  const user = req.body;
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
 
-  if(!user || !user.email) {
-    return res.status(400).json({ error: "User data is missing" });
-  } 
+      if (!user || !user.email) {
+        return res.status(400).json({ error: "User data is missing" });
+      }
 
-const token = jwt.sign({ email: user.email }, process.env.ACCESS_TOKEN_SECRET, {
-  expiresIn: "1h"
-});
+      const token = jwt.sign(
+        { email: user.email },
+        process.env.ACCESS_TOKEN_SECRET,
+        {
+          expiresIn: "1h",
+        }
+      );
 
-    res
-    .cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV=== 'producton'
-    })
-    res.send({ token });
-  });
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "producton",
+      });
+      res.send({ token });
+    });
 
     // Middleware setup
-app.use(express.json());  // Required for parsing JSON in request body
-app.use(cors({ credentials: true, origin: "http://localhost:5173" })); 
-app.use(cookieParser());
+    app.use(express.json()); // Required for parsing JSON in request body
+    app.use(cors({ credentials: true, origin: "http://localhost:5173" }));
+    app.use(cookieParser());
     const verifyToken = (req, res, next) => {
       // console.log('inside veryfy token', req.headers.authorization);
       if (!req.headers.authorization) {
@@ -116,12 +111,12 @@ app.use(cookieParser());
       }
       const token = req.headers.authorization.split(" ")[1];
       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-        if(err){
-          return res.status(401).send({message: 'unauthorized access'})
+        if (err) {
+          return res.status(401).send({ message: "unauthorized access" });
         }
         req.decoded = decoded;
         next();
-      })
+      });
     };
 
     // use verify admin after verifyToken
@@ -136,28 +131,6 @@ app.use(cookieParser());
       next();
     };
 
-    // carts collection
-    app.get('/carts', (req, res) => {
-      res.setHeader('Access-Control-Allow-Origin', 'https://adampur-4a343.web.app');  // Set your origin here
-      res.setHeader('Access-Control-Allow-Credentials', 'true'); // Allow credentials (cookies, etc.)
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE'); // Allow necessary methods
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization'); // Allow necessary headers
-    
-      // Your actual API logic here
-      const email = req.query.email;
-      const query = { email: email };
-      cartCollection.find(query).toArray()
-        .then(result => res.send(result))
-        .catch(error => res.status(500).send({ error: error.message }));
-    });
-    
-    // app.get("/carts", async (req, res) => {
-    //   const email = req.query.email;
-    //   const query = { email: email };
-    //   const result = await cartCollection.find(query).toArray();
-    //   res.send(result);
-    // });
-
     app.delete("/carts/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -165,15 +138,37 @@ app.use(cookieParser());
       res.send(result);
     });
 
-// logOut
+    // logOut
     app.post("/logout", async (req, res) => {
       const user = req.body;
       console.log("logging out", user);
       res
-      .clearCookie("token", { ...cookeOption, maxAge: 0 })
-      .send({ success: true});
+        .clearCookie("token", { ...cookeOption, maxAge: 0 })
+        .send({ success: true });
     });
 
+    // carts collection
+    app.get("/carts", async (req, res) => {
+      try {
+        const email = req.query.email;
+        console.log("Email received:", email);
+    
+        if (!email) {
+          return res.status(400).json({ message: "Email is required" });
+        }
+    
+        const query = { email };
+        const result = await cartCollection.find(query).toArray();
+    
+        console.log("Cart items found:", result); // Debugging
+    
+        res.json(result); // Ensure you're sending an array
+      } catch (error) {
+        console.error("Error fetching cart:", error);
+        res.status(500).json({ message: "Failed to fetch carts", error });
+      }
+    });
+    
     app.post("/carts", async (req, res) => {
       const cartItem = req.body;
       const result = await cartCollection.insertOne(cartItem);
@@ -186,11 +181,11 @@ app.use(cookieParser());
       res.send(result);
     });
 
-    app.post('/menu', verifyToken, verifyAdmin, async(req, res) =>{
+    app.post("/menu", verifyToken, verifyAdmin, async (req, res) => {
       const item = req.body;
       const result = await menuCollection.insertOne(item);
       res.send(result);
-    })
+    });
     // users related api
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       console.log(req.headers);
@@ -258,187 +253,198 @@ app.use(cookieParser());
       res.send(result);
     });
 
-    app.get('/menu/:id', async(req, res) => {
+    app.get("/menu/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) }
+      const query = { _id: new ObjectId(id) };
       const result = await menuCollection.findOne(query);
       res.send(result);
     });
 
-app.patch('/menu/:id', async(req, res) =>{
-  const item = req.body;
-  const id = req.params.id;
+    app.patch("/menu/:id", async (req, res) => {
+      const item = req.body;
+      const id = req.params.id;
 
-  const filter = { _id: new ObjectId(id) };
+      const filter = { _id: new ObjectId(id) };
 
-  let updatedDoc = {
-    $set: {
-      name: item.name,
-      grade: item.grade,
-      age: item.age,
-      category: item.category,
-      price: item.price,
-      description: item.description,
-      currency: item.currency,
-      isOptional: true,
-      paymentMode: item.paymentMode,
-      remarks: item.remarks,
-    }
-  };
+      let updatedDoc = {
+        $set: {
+          name: item.name,
+          grade: item.grade,
+          age: item.age,
+          category: item.category,
+          price: item.price,
+          description: item.description,
+          currency: item.currency,
+          isOptional: true,
+          paymentMode: item.paymentMode,
+          remarks: item.remarks,
+        },
+      };
 
-  // Check if `res.item` exists and has the `display_url` property
-  if (item && item.display_url) {
-    updatedDoc.$set.image = item.display_url;
-  } else {
-    console.error("Image URL is missing or `item` is undefined");
-  }
-  
-  try {
-    // Perform your MongoDB update operation
-    const result = await menuCollection.updateOne(filter, updatedDoc);
-    console.log('Update result:', result);
-  } catch (error) {
-    console.error('Error updating document:', error);
-  }  
-
-  const result = await menuCollection.updateOne(filter, updatedDoc)
-  res.send(result);
-})
-
- // payment intent
- 
- app.post('/create-payment-intent', async(req, res) => {
-  const { price} = req.body;
-  const amount = parseInt(price * 100);
-  console.log(amount, 'amount inside the intent')
-
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: amount,
-    currency: 'usd',
-    payment_method_types: ['card']
-  });
-  res.send({
-    clientSecret: paymentIntent.client_secret
-  })
-})
-
-app.get('/payments/:email', verifyToken, async (req, res) => {
-  const query = { email: req.params.email }
-  if (req.params.email !== req.decoded.email){
-    return res.status(403).send({ message: 'forbidden access' });
-  }
-  const result = await paymentCollection.find(query).toArray();
-  res.send(result);
-})
-
-app.post('/payments', async(req, res) =>{
-  const payment = req.body;
-  const paymentResult = await paymentCollection.insertOne(payment);
-
-  // carefully delete each item from the cart
-  console.log('payment info', payment);
-  const query = {_id: {
-    $in: payment.cartIds.map(id => new ObjectId(id))
-  }};
-
-const deleteResult = await cartCollection.deleteMany(query);
-
-  res.send({paymentResult, deleteResult});
-})
-
-// stripe-test
-app.get("/stripe-test", async (req, res) => {
-  try {
-    const balance = await stripe.balance.retrieve();
-    res.json(balance);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Stripe error");
-  }
-});
-
-
-// stats or ananlytics
-app.get('/admin-stats', verifyToken, verifyAdmin, async(req, res) =>{
-  const users = await userCollection.estimatedDocumentCount();
-  const menuItems = await menuCollection.estimatedDocumentCount();
-  const orders = await paymentCollection.estimatedDocumentCount();
-
-  const result = await paymentCollection.aggregate([
-    {
-      $group: {
-        _id: null,
-        totalRevenue: {
-          $sum: '$price'
-        }
+      // Check if `res.item` exists and has the `display_url` property
+      if (item && item.display_url) {
+        updatedDoc.$set.image = item.display_url;
+      } else {
+        console.error("Image URL is missing or `item` is undefined");
       }
-    }
-  ]).toArray();
 
-  const revenue = result.length > 0 ? result[0].totalRevenue: 0;
+      try {
+        // Perform your MongoDB update operation
+        const result = await menuCollection.updateOne(filter, updatedDoc);
+        console.log("Update result:", result);
+      } catch (error) {
+        console.error("Error updating document:", error);
+      }
 
-  res.send({
-    users,
-    menuItems,
-    orders,
-    revenue
+      const result = await menuCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
 
-  })
-})
+    // payment intent
 
-// usging aggregate pipeline
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+      console.log(amount, "amount inside the intent");
 
-const { ObjectId } = require('mongodb');
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
 
-app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
-  try {
-    const result = await paymentCollection.aggregate([
-      {
-        $unwind: '$menuItemIds', // Break down each menuItemId into individual documents
-      },
-      {
-        $addFields: {
-          menuItemObjectId: { $convert: { input: '$menuItemIds', to: 'objectId', onError: null, onNull: null } },
+    app.get("/payments/:email", verifyToken, async (req, res) => {
+      const query = { email: req.params.email };
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+
+      // carefully delete each item from the cart
+      console.log("payment info", payment);
+      const query = {
+        _id: {
+          $in: payment.cartIds.map((id) => new ObjectId(id)),
         },
-      },
-      {
-        $lookup: {
-          from: 'fee',
-          localField: 'menuItemObjectId', // Use the converted ObjectId
-          foreignField: '_id',
-          as: 'menuItems',
-        },
-      },
-      {
-        $unwind: '$menuItems', // Flatten the array returned by $lookup
-      },
-      {
-        $group: {
-          _id: '$menuItems.name', // Group by the name of menu items
-          email: { $first: '$email' }, // Include the email field
-          totalOrders: { $sum: 1 }, // Count the number of orders
-          menuItems: { $push: '$menuItems' }, // Collect the matched menu items
-          revenue: { $sum: { $toDouble: '$menuItems.price' } }, 
-          quantity: { $sum: 1 }, 
-        },
-      },
-      {
-        $project: {
-          _id: 0, 
-          totalOrders: 1,
-          menuItems: 1, 
-          revenue: 1, 
-          quantity: 1, 
-        },
-      },
-    ]).toArray();
+      };
 
-    res.send(result);
-  } catch (error) {
-    console.error('Error in /order-stats:', error);
-    res.status(500).send({ message: 'Internal server error', error });
-  }
-});
+      const deleteResult = await cartCollection.deleteMany(query);
+
+      res.send({ paymentResult, deleteResult });
+    });
+
+    // stripe-test
+    app.get("/stripe-test", async (req, res) => {
+      try {
+        const balance = await stripe.balance.retrieve();
+        res.json(balance);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send("Stripe error");
+      }
+    });
+
+    // stats or ananlytics
+    app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
+      const users = await userCollection.estimatedDocumentCount();
+      const menuItems = await menuCollection.estimatedDocumentCount();
+      const orders = await paymentCollection.estimatedDocumentCount();
+
+      const result = await paymentCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalRevenue: {
+                $sum: "$price",
+              },
+            },
+          },
+        ])
+        .toArray();
+
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+
+      res.send({
+        users,
+        menuItems,
+        orders,
+        revenue,
+      });
+    });
+
+    // usging aggregate pipeline
+
+    const { ObjectId } = require("mongodb");
+
+    app.get("/order-stats", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const result = await paymentCollection
+          .aggregate([
+            {
+              $unwind: "$menuItemIds", // Break down each menuItemId into individual documents
+            },
+            {
+              $addFields: {
+                menuItemObjectId: {
+                  $convert: {
+                    input: "$menuItemIds",
+                    to: "objectId",
+                    onError: null,
+                    onNull: null,
+                  },
+                },
+              },
+            },
+            {
+              $lookup: {
+                from: "fee",
+                localField: "menuItemObjectId", // Use the converted ObjectId
+                foreignField: "_id",
+                as: "menuItems",
+              },
+            },
+            {
+              $unwind: "$menuItems", // Flatten the array returned by $lookup
+            },
+            {
+              $group: {
+                _id: "$menuItems.name", // Group by the name of menu items
+                email: { $first: "$email" }, // Include the email field
+                totalOrders: { $sum: 1 }, // Count the number of orders
+                menuItems: { $push: "$menuItems" }, // Collect the matched menu items
+                revenue: { $sum: { $toDouble: "$menuItems.price" } },
+                quantity: { $sum: 1 },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                totalOrders: 1,
+                menuItems: 1,
+                revenue: 1,
+                quantity: 1,
+              },
+            },
+          ])
+          .toArray();
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error in /order-stats:", error);
+        res.status(500).send({ message: "Internal server error", error });
+      }
+    });
 
     app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
@@ -451,8 +457,7 @@ app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
       const result = await reviewCollection.find().toArray();
       res.send(result);
     });
-    
-
+// student related api
     app.get("/student", async (req, res) => {
       try {
         const result = await studentCollection.find({}).toArray();
@@ -461,6 +466,16 @@ app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
       } catch (error) {
         console.error("Error fetching students:", error);
         res.status(500).send({ error: "Failed to fetch students" });
+      }
+    });
+
+    app.post("/student", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const student = req.body;
+        const studentResult = await studentCollection.insertOne(student);
+        res.status(201).json({ success: true, insertedId: studentResult.insertedId });
+      } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error", error });
       }
     });
     
