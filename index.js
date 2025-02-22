@@ -9,24 +9,22 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 5000;
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://adampur-4a343.web.app",
-  "https://adampur-4a343.firebaseapp.com",
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, origin);
+        callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
       }
     },
-    credentials: true,
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-    allowedHeaders: "Content-Type,Authorization",
+    credentials: true, 
   })
 );
 
@@ -34,18 +32,6 @@ app.use(
 app.get("/carts", (req, res) => {
   res.json({ message: "Carts data" });
 });
-
-// app.use(cors({
-//   origin: [
-//       "http://localhost:5173",
-//       "https://adampur-4a343.web.app",
-//       "https://adampur-4a343.firebaseapp.com",
-
-//   ],
-//   credentials: true,
-//   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-//   allowedHeaders: "Content-Type,Authorization"
-// }));
 
 app.use(express.json());
 app.use(cookieParser());
