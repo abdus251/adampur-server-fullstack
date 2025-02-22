@@ -10,28 +10,21 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const app = express();
 const port = process.env.PORT || 5000;
 
-// const allowedOrigins = [
-//   "http://localhost:5173",
-//   "https://adampur-4a343.web.app",
-// ];
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://adampur-4a343.web.app",
+  "https://adampur-client-fullstack.vercel.app"
+];
 
-app.use(
-  cors(
-    {
-    origin: [ "https://adampur-client-fullstack.vercel.app"],
-    methods: ["POST", "GET"],
-    credentials: true, 
-  }
-));
+// Enable CORS with specific options
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true, // Allows cookies to be sent
+}));
 
 app.use(express.json());
 app.use(cookieParser());
-
-// my routes here
-app.get("/carts", (req, res) => {
-  res.json({ message: "Carts data" });
-});
-
+app.use(helmet()); // Adds security headers
 
 
 // const uri = "mongodb://localhost:27017"
